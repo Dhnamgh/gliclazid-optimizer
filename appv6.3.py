@@ -14,6 +14,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, max_error
 import statsmodels.formula.api as smf
 from scipy.stats import shapiro
+from scipy.optimize import differential_evolution
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
@@ -26,6 +27,7 @@ import os
 from docx import Document
 from docx.shared import Inches
 from PIL import Image
+
 def format_number(val):
     try:
         if pd.isna(val):
@@ -37,10 +39,12 @@ def format_number(val):
         return str(val)
     except:
         return str(val)
+
 from statsmodels.stats.diagnostic import het_breuschpagan, linear_reset
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.stats.stattools import durbin_watson
 import statsmodels.api as sm
+
 # Hàm định dạng số: nếu là số nguyên thì không có chữ số thập phân, nếu là số thực thì có 3 chữ số
 def auto_fmt(x):
     try:
@@ -51,6 +55,36 @@ def auto_fmt(x):
             return f"{x_float:.3f}"
     except:
         return str(x)
+
+# Chuẩn hoá dict best từ nhiều nguồn (optimal_row/best_formula)
+def _as_best_dict(obj):
+    """
+    Chuẩn hóa về {'x1':..., 'x2':..., 'x3':..., 'y': (tùy)}
+    Hỗ trợ:
+      - dict có 'x1','x2','x3'
+      - list/tuple/ndarray: [x1,x2,x3]
+      - dict kiểu hiển thị: {"Primellose (%)":..., "PVP (%)":..., "Aerosil (%)":...}
+    """
+    if obj is None:
+        return None
+    # dạng đã chuẩn
+    if isinstance(obj, dict) and all(k in obj for k in ("x1","x2","x3")):
+        d = {'x1': float(obj['x1']), 'x2': float(obj['x2']), 'x3': float(obj['x3'])}
+        if 'objective' in obj:
+            d['y_pred'] = float(obj['objective'])
+        return d
+    # dạng hiển thị optimal_row
+    if isinstance(obj, dict) and all(k in obj for k in ("Primellose (%)","PVP (%)","Aerosil (%)")):
+        return {
+            'x1': float(obj["Primellose (%)"]),
+            'x2': float(obj["PVP (%)"]),
+            'x3': float(obj["Aerosil (%)"]),
+            'y_pred': float(obj.get("y (dự đoán)", np.nan)) if obj.get("y (dự đoán)") is not None else np.nan
+        }
+    # list/tuple/array
+    if isinstance(obj, (list, tuple, np.ndarray)) and len(obj) >= 3:
+        return {'x1': float(obj[0]), 'x2': float(obj[1]), 'x3': float(obj[2])}
+    return None
 
 # Hàm tạo phương trình hồi quy
 def gen_regression_equation(model, response_name="y"):
@@ -85,15 +119,17 @@ st.session_state.setdefault("targets", {
     'y3': 'Tỷ lệ hòa tan'
 })
 st.session_state.setdefault("results", {})
-st.session_state.setdefault("best_formula", None)
+st.session_state.setdefault("best_formula", None)   # sẽ lưu {'x1','x2','x3','y_pred'}
 st.session_state.setdefault("saved_formulas", [])
+
 # 📌 Sidebar điều hướng
 st.sidebar.image("background.png", use_container_width=True)
-st.sidebar.title("Gliclazid Optimizer V5")
+st.sidebar.title("Gliclazid Optimizer V6")
 tab = st.sidebar.radio("🔍 Chọn chức năng", [
     "📤 Dữ liệu", "🧩 Trực quan hóa dữ liệu", "🧮 Phân tích độ nhạy", "📊 Mô hình", "🧠 Diễn giải mô hình", "📈 Thống kê mô tả", "📉 Kiểm định", "🎯 Tối ưu", "📝 Báo cáo",
     "📄 Phân tích hồi quy", "🔗 So sánh các mô hình", "📤 Xuất kết quả", "📬 Phản hồi"
 ])
+
 # Tab Dữ liệu
 if tab == "📤 Dữ liệu":
     uploaded_file = st.file_uploader(
@@ -107,6 +143,7 @@ if tab == "📤 Dữ liệu":
     else:
         st.warning("⚠️ Vui lòng tải lên file CSV để tiếp tục.")
         st.stop()
+
 # Trực quan hóa dữ liệu
 if tab == "🧩 Trực quan hóa dữ liệu":
     st.header("🧩 So sánh biểu đồ 2 biến định lượng")
@@ -159,6 +196,7 @@ if tab == "🧩 Trực quan hóa dữ liệu":
         file_name=f"Comparison_{var1}_vs_{var2}.png",
         mime="image/png"
     )
+
 # Tab Phân tích độ nhạy
 if tab == "🧮 Phân tích độ nhạy":
     st.header("🧮 Phân tích độ nhạy (Sensitivity Analysis)")
@@ -192,19 +230,6 @@ if tab == "🧮 Phân tích độ nhạy":
         "Tầm quan trọng": importances
     }).sort_values("Tầm quan trọng", ascending=False)
 
-    # Hàm định dạng số tùy theo kiểu dữ liệu
-    def format_number(val):
-        try:
-            if pd.isna(val):
-                return ""
-            if isinstance(val, (int, np.integer)):
-                return str(val)
-            if isinstance(val, (float, np.floating)):
-                return f"{val:.0f}" if val.is_integer() else f"{val:.3f}"
-            return str(val)
-        except:
-            return str(val)
-
     st.markdown(f"📌 **Tầm quan trọng của các biến đầu vào đối với `{target_col}`:**")
     st.dataframe(importance_df.style.format(format_number), use_container_width=True)
 
@@ -236,6 +261,7 @@ if tab == "🧮 Phân tích độ nhạy":
         mime="image/png",
         key=f"download_importance_{target_col}_{uuid4()}"
     )
+
 # Tab 📊 Mô hình
 if tab == "📊 Mô hình":
     st.header("📊 Huấn luyện mô hình hồi quy")
@@ -271,7 +297,7 @@ if tab == "📊 Mô hình":
     y_pred = model.predict(X)
 
     r2 = r2_score(y, y_pred)
-    rmse = np.sqrt(mean_squared_error(y, y_pred))  # ✅ sửa lỗi
+    rmse = np.sqrt(mean_squared_error(y, y_pred))
     mae = mean_absolute_error(y, y_pred)
 
     st.success(f"✅ Huấn luyện hoàn tất với mô hình **{model_type}**")
@@ -302,6 +328,49 @@ if tab == "📊 Mô hình":
     fig.savefig(buf, format="png")
     buf.seek(0)
     st.session_state["residual_plot"] = buf
+
+# Tab 🧠 Diễn giải mô hình
+if tab == "🧠 Diễn giải mô hình":
+    st.header("🧠 Diễn giải mô hình (SHAP)")
+
+    df = st.session_state.get("df")
+    model = st.session_state.get("model")
+
+    if df is None or model is None:
+        st.warning("⚠️ Cần tải dữ liệu và huấn luyện mô hình ở tab 📊 Mô hình trước.")
+        st.stop()
+
+    # Xác định cột đầu vào (x1,x2,x3). Có thể mở rộng nếu bạn có nhiều x*
+    input_cols = [c for c in df.columns if c.startswith("x")]
+    if not input_cols:
+        st.warning("⚠️ Không tìm thấy cột đầu vào (x1, x2, x3, ...).")
+        st.stop()
+
+    X = df[input_cols]
+
+    # Tạo explainer phù hợp (Explainer tự chọn backend: Tree, Linear, Kernel...)
+    try:
+        explainer = shap.Explainer(model, X)
+        shap_values = explainer(X)
+    except Exception as e:
+        st.error(f"Không tính được SHAP cho mô hình này: {e}")
+        st.stop()
+
+    st.subheader("🔎 Mức độ ảnh hưởng tổng quát (bar)")
+    plt.figure()
+    shap.summary_plot(shap_values, X, plot_type="bar", show=False)
+    fig_bar = plt.gcf()
+    st.pyplot(fig_bar)
+
+    st.subheader("🐝 Beeswarm (phân bố ảnh hưởng theo từng mẫu)")
+    plt.figure()
+    shap.summary_plot(shap_values, X, show=False)
+    fig_bee = plt.gcf()
+    st.pyplot(fig_bee)
+
+    # Lưu 1 hình vào session_state để xuất báo cáo Word
+    st.session_state["shap_plot"] = fig_bar
+
 # Thống kê mô tả
 if tab == "📈 Thống kê mô tả":
     df = st.session_state.get("df")
@@ -356,8 +425,8 @@ if tab == "📈 Thống kê mô tả":
     # Chuyển về dạng đúng: chỉ số là hàng, biến là cột
     stats_df = pd.DataFrame(result)
 
-    # Hàm định dạng thông minh: số nguyên thì không thập phân, số thực thì 3 chữ số
-    def auto_fmt(val):
+    # Hàm định dạng thông minh
+    def auto_fmt2(val):
         try:
             val = float(val)
             return f"{val:.0f}" if val.is_integer() else f"{val:.3f}"
@@ -367,14 +436,15 @@ if tab == "📈 Thống kê mô tả":
     # Tạo bản đã định dạng để hiển thị đẹp
     formatted_df = stats_df.copy()
     for col in formatted_df.columns:
-        formatted_df[col] = formatted_df[col].apply(auto_fmt)
+        formatted_df[col] = formatted_df[col].apply(auto_fmt2)
 
     # Hiển thị bảng đã định dạng
     st.dataframe(formatted_df, use_container_width=True)
 
     # Ghi vào session_state để xuất báo cáo
-    st.session_state["stats_df"] = stats_df            # bản gốc (để tính toán lại nếu cần)
-    st.session_state["stats_df_fmt"] = formatted_df    # bản định dạng (để xuất ra Word)
+    st.session_state["stats_df"] = stats_df            # bản gốc
+    st.session_state["stats_df_fmt"] = formatted_df    # bản định dạng
+
 #Tab Kiểm định
 if tab == "📉 Kiểm định":
     import statsmodels.api as sm
@@ -469,8 +539,8 @@ if tab == "📉 Kiểm định":
     # Lưu vào session_state
     st.session_state["regression_tests"] = regression_tests
 
-#Tab Tối ưu
-if tab == "📌 Tối ưu công thức":
+# Tab Tối ưu
+if tab == "🎯 Tối ưu":
     st.header("📌 Tối ưu công thức đầu vào để tối đa hóa đầu ra")
 
     df = st.session_state.get("df")
@@ -500,118 +570,112 @@ if tab == "📌 Tối ưu công thức":
     - Primellose: `{best[0]:.2f}` %
     - PVP: `{best[1]:.2f}` %
     - Aerosil: `{best[2]:.2f}` %
-    - 🔼 Dự đoán đầu ra tối ưu: `{best_output:.2f}`
+    - 🔼 Dự đoán đầu ra tối ưu (y1): `{best_output:.2f}`
     """)
 
-    # 🔁 Lưu vào session_state để xuất báo cáo
+    # 🔁 Lưu vào session_state theo 2 dạng (để tương thích các tab khác)
     st.session_state["optimal_row"] = {
         "Primellose (%)": round(best[0], 2),
         "PVP (%)": round(best[1], 2),
         "Aerosil (%)": round(best[2], 2),
         "y (dự đoán)": round(best_output, 2)
     }
+    st.session_state["best_formula"] = {
+        "x1": float(best[0]),
+        "x2": float(best[1]),
+        "x3": float(best[2]),
+        "objective": float(best_output)
+    }
 
 # Tab Báo cáo
 if tab == "📝 Báo cáo":
     df = st.session_state.get("df")
     results = st.session_state.get("results", {})
-    best = st.session_state.get("best_formula")
     targets = st.session_state.targets
+    model = st.session_state.get("model")
 
-    if df is None or best is None:
+    # Lấy best từ mọi nguồn
+    best = _as_best_dict(st.session_state.get("best_formula"))
+    if best is None:
+        best = _as_best_dict(st.session_state.get("optimal_row"))
+
+    if df is None or best is None or model is None:
         st.warning("⚠️ Bạn cần chạy mô hình và tối ưu công thức trước.")
         st.stop()
 
-    # Hàm tự động định dạng số
-    def auto_fmt(val):
-        return f"{val:.0f}" if float(val).is_integer() else f"{val:.3f}"
-
-    st.markdown("### 📝 Tạo báo cáo tổng hợp")
     X = df[["x1", "x2", "x3"]]
-
-    all_models = {
-        "Linear Regression": LinearRegression(),
-        "Lasso Regression": Lasso(alpha=0.1),
-        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42),
-        "ANN (Neural Network)": MLPRegressor(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)
-    }
+    # Nếu chưa có y_pred trong best, dự đoán bằng model hiện tại cho y1
+    if "y_pred" not in best or pd.isna(best.get("y_pred")):
+        best["y_pred"] = float(model.predict(np.array([[best["x1"], best["x2"], best["x3"]]]))[0])
 
     # --- Tạo đoạn mô tả tổng quan ---
     report_text = f"""--- BÁO CÁO PHÂN TÍCH ---
 Tác giả: Đào Hồng Nam
 Ngày phân tích: {datetime.today().strftime('%d-%m-%Y')}
 
-🔬 Công thức tối ưu:
-- Primellose: {auto_fmt(best['x1'])}%
-- Sepitrap: {auto_fmt(best['x2'])}%
-- PVP: {auto_fmt(best['x3'])}%
-→ Độ cứng: {auto_fmt(best['y1'])} kP | Rã: {auto_fmt(best['y2'])} phút | Hòa tan: {auto_fmt(best['y3'])}%
+🔬 Công thức tối ưu (đầu vào):
+- Primellose: {auto_fmt(best['x1'])} %
+- PVP: {auto_fmt(best['x2'])} %
+- Aerosil: {auto_fmt(best['x3'])} %
+→ Dự đoán đầu ra tối ưu (y1): {auto_fmt(best['y_pred'])}
 """
 
     # --- Kết quả từ tab Mô hình (nếu có) ---
     if results:
-        report_text += "\n\n📊 Kết quả mô hình đang chọn:\n"
+        report_text += "\n📊 Kết quả mô hình đang chọn:\n"
         for target, metrics in results.items():
             label = targets.get(target, target)
             r2 = metrics['r2']
             mae = metrics['mae']
             report_text += f"- {label} ({target}): R² = {auto_fmt(r2)}, MAE = {auto_fmt(mae)}\n"
 
-    # --- Kết quả tất cả mô hình ---
-    for model_name, model in all_models.items():
+    # --- Kết quả tất cả mô hình (huấn luyện nhanh trên toàn bộ dữ liệu) ---
+    all_models = {
+        "Linear Regression": LinearRegression(),
+        "Lasso Regression": Lasso(alpha=0.1),
+        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42),
+        "ANN (Neural Network)": MLPRegressor(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)
+    }
+    for model_name, mdl in all_models.items():
         report_text += f"\n📊 Kết quả mô hình: {model_name}\n"
         for target, label in targets.items():
+            if target not in df.columns:
+                continue
             y = df[target]
-            model.fit(X, y)
-            y_pred = model.predict(X)
+            mdl.fit(X, y)
+            y_pred = mdl.predict(X)
             r2 = r2_score(y, y_pred)
             mae = mean_absolute_error(y, y_pred)
             report_text += f"- {label} ({target}): R² = {auto_fmt(r2)}, MAE = {auto_fmt(mae)}\n"
 
     # --- Hiển thị văn bản ---
     st.code(report_text, language="markdown")
+    st.session_state["best_formula_text"] = report_text
 
     # --- Ghi ra file Word ---
     if st.button("📥 Tải báo cáo Word"):
-        from docx import Document
-        from docx.shared import Inches
-        import io
-
         doc = Document()
         doc.add_heading("BÁO CÁO PHÂN TÍCH TỔNG HỢP", 0)
         doc.add_paragraph(f"Tác giả: Đào Hồng Nam\nNgày: {datetime.today().strftime('%d-%m-%Y')}")
         doc.add_heading("🔬 Công thức tối ưu", level=1)
         doc.add_paragraph(st.session_state.get("best_formula_text", "Chưa có dữ liệu."))
 
-        # Thêm bảng Top 3 công thức tối ưu
-        top3 = st.session_state.get("top3_optimized")
-        if top3 is not None:
-            doc.add_heading("🏆 Top 3 công thức tối ưu", level=2)
-            table = doc.add_table(rows=1, cols=len(top3.columns))
-            hdr_cells = table.rows[0].cells
-            for i, col in enumerate(top3.columns):
-                hdr_cells[i].text = col
-            for _, row in top3.iterrows():
-                row_cells = table.add_row().cells
-                for i, val in enumerate(row):
-                    row_cells[i].text = auto_fmt(val)
-
-        # Thêm kết quả mô hình
-        doc.add_heading("📊 Kết quả mô hình đang chọn", level=1)
-        for target, metrics in results.items():
-            label = targets.get(target, target)
-            doc.add_paragraph(
-                f"{label} ({target}): R² = {auto_fmt(metrics['r2'])}, MAE = {auto_fmt(metrics['mae'])}"
-            )
+        # Thêm kết quả mô hình đang chọn (nếu có)
+        if results:
+            doc.add_heading("📊 Kết quả mô hình đang chọn", level=1)
+            for target, metrics in results.items():
+                label = targets.get(target, target)
+                doc.add_paragraph(
+                    f"{label} ({target}): R² = {auto_fmt(metrics['r2'])}, MAE = {auto_fmt(metrics['mae'])}"
+                )
 
         # Lưu ra file buffer
         buf = io.BytesIO()
         doc.save(buf)
         st.download_button("📤 Tải báo cáo Word", buf.getvalue(), file_name="bao_cao_phan_tich.docx")
 
-
-# Tab Phân tích hồi quy
-if tab == "📉 Phân tích hồi quy":
+# Tab Phân tích hồi quy (đồng bộ đúng tên tab)
+if tab == "📄 Phân tích hồi quy":
     st.header("📉 Phân tích hồi quy tuyến tính")
 
     df = st.session_state.get("df")
@@ -626,9 +690,9 @@ if tab == "📉 Phân tích hồi quy":
     y = df[target_col]
 
     X_const = sm.add_constant(X)
-    model = sm.OLS(y, X_const).fit()
+    model_ols = sm.OLS(y, X_const).fit()
 
-    summary_str = model.summary().as_text()
+    summary_str = model_ols.summary().as_text()
 
     st.text("📄 Kết quả hồi quy:")
     st.text(summary_str)
@@ -653,8 +717,7 @@ if tab == "🔗 So sánh các mô hình":
     y = df['y1']
     n, k = X.shape
 
-    # Hàm định dạng số tự động
-    def auto_fmt(val):
+    def auto_fmt3(val):
         return f"{val:.0f}" if float(val).is_integer() else f"{val:.3f}"
 
     models = {
@@ -664,35 +727,36 @@ if tab == "🔗 So sánh các mô hình":
         "ANN (Neural Network)": MLPRegressor(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)
     }
 
-    results = []
-    for name, model in models.items():
-        model.fit(X, y)
-        pred = model.predict(X)
+    results_tbl = []
+    for name, mdl in models.items():
+        mdl.fit(X, y)
+        pred = mdl.predict(X)
 
         mse = mean_squared_error(y, pred)
         rmse = np.sqrt(mse)
         mae = mean_absolute_error(y, pred)
-        mape = np.mean(np.abs((y - pred) / y)) * 100 if all(y != 0) else np.nan
+        mape = np.mean(np.abs((y - pred) / y)) * 100 if np.all(y != 0) else np.nan
         r2 = r2_score(y, pred)
         adj_r2 = 1 - (1 - r2) * (n - 1) / (n - k - 1)
         maxerr = max_error(y, pred)
 
-        results.append({
+        results_tbl.append({
             "Mô hình": name,
-            "R²": auto_fmt(r2),
-            "Adj. R²": auto_fmt(adj_r2),
-            "MSE": auto_fmt(mse),
-            "RMSE": auto_fmt(rmse),
-            "MAE": auto_fmt(mae),
-            "MAPE (%)": auto_fmt(mape) if not np.isnan(mape) else "NA",
-            "Max Error": auto_fmt(maxerr)
+            "R²": auto_fmt3(r2),
+            "Adj. R²": auto_fmt3(adj_r2),
+            "MSE": auto_fmt3(mse),
+            "RMSE": auto_fmt3(rmse),
+            "MAE": auto_fmt3(mae),
+            "MAPE (%)": auto_fmt3(mape) if not np.isnan(mape) else "NA",
+            "Max Error": auto_fmt3(maxerr)
         })
 
-    df_result = pd.DataFrame(results)
+    df_result = pd.DataFrame(results_tbl)
     st.dataframe(df_result, use_container_width=True)
 
     # 🔄 Lưu vào session_state để dùng cho báo cáo/xuất file
     st.session_state["model_comparison"] = df_result
+
 # Tab Xuất kết quả
 if tab == "📤 Xuất kết quả":
     st.header("📤 Xuất kết quả tổng hợp")
@@ -733,12 +797,12 @@ if tab == "📤 Xuất kết quả":
     # 3. Phân tích độ nhạy
     doc.add_heading("3. Phân tích độ nhạy", level=1)
     if "importance_df" in st.session_state:
-        df = st.session_state["importance_df"]
-        table = doc.add_table(rows=1, cols=len(df.columns))
+        df_imp = st.session_state["importance_df"]
+        table = doc.add_table(rows=1, cols=len(df_imp.columns))
         table.style = "Table Grid"
-        for i, col in enumerate(df.columns):
+        for i, col in enumerate(df_imp.columns):
             table.cell(0, i).text = str(col)
-        for _, row in df.iterrows():
+        for _, row in df_imp.iterrows():
             row_cells = table.add_row().cells
             for i, val in enumerate(row):
                 row_cells[i].text = str(val)
@@ -764,20 +828,26 @@ if tab == "📤 Xuất kết quả":
 
     # 6. Kiểm định giả định hồi quy
     doc.add_heading("6. Kiểm định giả định hồi quy", level=1)
-    if "residual_tests" in st.session_state:
-        for res in st.session_state["residual_tests"]:
+    if "regression_tests" in st.session_state:
+        for res in st.session_state["regression_tests"]:
             para = doc.add_paragraph()
             para.add_run(f"{res['Biến đầu ra']}:\n").bold = True
-            para.add_run(f"  - W = {res['W']}, p = {res['p-value']}\n")
-            para.add_run(f"  - Kết luận: {res['Kết luận']}\n")
+            para.add_run(f"  - {res['Shapiro-Wilk']}\n")
+            para.add_run(f"  - {res['Breusch–Pagan']}\n")
+            para.add_run(f"  - {res['Durbin-Watson']}\n")
+            para.add_run(f"  - {res['Ramsey RESET']}\n")
     else:
         doc.add_paragraph("Chưa có kết quả kiểm định.")
 
     # 7. Tối ưu công thức
     doc.add_heading("7. Tối ưu công thức", level=1)
-    if "optimal_formula" in st.session_state:
-        doc.add_paragraph("Công thức tối ưu được đề xuất:")
-        doc.add_paragraph(st.session_state["optimal_formula"])
+    best = _as_best_dict(st.session_state.get("best_formula")) or _as_best_dict(st.session_state.get("optimal_row"))
+    if best is not None:
+        doc.add_paragraph(
+            f"Primellose: {auto_fmt(best['x1'])}% | PVP: {auto_fmt(best['x2'])}% | Aerosil: {auto_fmt(best['x3'])}%"
+        )
+        if "y_pred" in best and not pd.isna(best["y_pred"]):
+            doc.add_paragraph(f"Dự đoán y1 tối ưu: {auto_fmt(best['y_pred'])}")
     else:
         doc.add_paragraph("Chưa có công thức tối ưu.")
 
@@ -815,7 +885,6 @@ if tab == "📤 Xuất kết quả":
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-
 # Tab Phản hồi
 if tab == "📬 Phản hồi":
     st.markdown("## 📬 Góp ý & Phản hồi")
@@ -829,20 +898,26 @@ if tab == "📬 Phản hồi":
         if submitted:
             st.success("✅ Cảm ơn bạn đã phản hồi!")
 
-# Gửi qua API giả lập
-            requests.post("https://your-email-api.com/send", json={
-                "to": "dhnamump@gmail.com",
-                "subject": f"Phản hồi từ {name} ({feedback_type})",
-                "body": f"Email: {email}\nLoại: {feedback_type}\nNội dung:\n{feedback}"
-            })
+            # Gửi qua API giả lập (bọc try/except để không làm dừng app)
+            try:
+                requests.post("https://your-email-api.com/send", json={
+                    "to": "dhnamump@gmail.com",
+                    "subject": f"Phản hồi từ {name} ({feedback_type})",
+                    "body": f"Email: {email}\nLoại: {feedback_type}\nNội dung:\n{feedback}"
+                })
+            except Exception as e:
+                st.info("Thông tin đã được ghi nhận (không gửi API).")
 
-            requests.post("https://sheet-api.com/append", json={
-                "name": name,
-                "email": email,
-                "type": feedback_type,
-                "content": feedback,
-                "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-            })
+            try:
+                requests.post("https://sheet-api.com/append", json={
+                    "name": name,
+                    "email": email,
+                    "type": feedback_type,
+                    "content": feedback,
+                    "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                })
+            except Exception:
+                pass
 
 # Footer HTML
 st.markdown("""
