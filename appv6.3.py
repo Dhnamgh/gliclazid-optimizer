@@ -93,6 +93,17 @@ def gen_regression_equation(model, response_name="y"):
     intercept = f"{params['Intercept']:.2f}"
     return f"{response_name} = {intercept} + " + " + ".join(terms)
 
+# --- Auto-load default CSV once at startup ---
+def _autoload_df_once():
+    if st.session_state.get("df") is None:
+        try:
+            st.session_state["df"] = pd.read_csv("Gliclazid Data.csv")
+        except FileNotFoundError:
+            # Không chặn app; các tab sẽ cảnh báo nếu file không có
+            st.session_state["df"] = None
+
+_autoload_df_once()
+
 # Cấu hình Streamlit
 st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 
@@ -939,4 +950,5 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
+
 
