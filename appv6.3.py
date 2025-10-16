@@ -132,17 +132,29 @@ tab = st.sidebar.radio("🔍 Chọn chức năng", [
 
 # Tab Dữ liệu
 if tab == "📤 Dữ liệu":
-    uploaded_file = st.file_uploader(
-        "📁 Tải lên file CSV chứa x1, x2, x3, y1, y2, y3", type=["csv"]
-    )
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+    try:
+        # Đọc sẵn file CSV có sẵn trong cùng thư mục với file app
+        df = pd.read_csv("Gliclazid Data.csv")
+
+        # Lưu vào session_state để các tab khác dùng
         st.session_state.df = df
-        st.success("✅ Dữ liệu đã tải thành công")
+
+        st.success("✅ Đã nạp dữ liệu mẫu: 'Gliclazid Data.csv'")
         st.dataframe(df.style.format(format_number))
-    else:
-        st.warning("⚠️ Vui lòng tải lên file CSV để tiếp tục.")
+
+        # (Tùy chọn) Cho phép người dùng tải file khác nếu muốn
+        with st.expander("📁 Tải file CSV khác (tùy chọn)"):
+            uploaded_file = st.file_uploader("Chọn file CSV khác:", type=["csv"])
+            if uploaded_file is not None:
+                df_new = pd.read_csv(uploaded_file)
+                st.session_state.df = df_new
+                st.info("📄 Dữ liệu mới đã được thay thế thành công.")
+                st.dataframe(df_new.style.format(format_number))
+
+    except FileNotFoundError:
+        st.error("❌ Không tìm thấy file 'Gliclazid Data.csv' trong cùng thư mục ứng dụng.")
         st.stop()
+
 
 # Trực quan hóa dữ liệu
 if tab == "🧩 Trực quan hóa dữ liệu":
@@ -927,3 +939,4 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
+
