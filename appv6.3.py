@@ -105,7 +105,6 @@ def _autoload_df_once():
 _autoload_df_once()
 
 # Cấu hình Streamlit
-
 # --- UI hardening: ẩn menu/footer, che nav sidebar, vô hiệu click ---
 _HARDEN_CSS = """
 <style>
@@ -120,13 +119,12 @@ section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] a {
 body.app-locked [data-testid="stSidebar"] * { pointer-events:none; opacity:.35; }
 </style>
 """
-st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 
+st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 st.markdown(_HARDEN_CSS, unsafe_allow_html=True)
 
 # --- Auth gate ---
 def _login_gate():
-    import time
     if "auth_ok" not in st.session_state:
         st.session_state.auth_ok = False
     st.markdown(
@@ -135,15 +133,14 @@ def _login_gate():
         unsafe_allow_html=True
     )
     if st.session_state.auth_ok:
-        topcol1, topcol2 = st.columns([1,1])
-        with topcol1:
+        left, right = st.columns([1,1])
+        with left:
             st.success(f"🔐 Đã đăng nhập: **{st.session_state.get('who','user')}**")
-        with topcol2:
+        with right:
             if st.button("Đăng xuất"):
                 st.session_state.clear()
                 st.rerun()
         return True
-
     with st.container(border=True):
         st.subheader("🔐 Đăng nhập để sử dụng ứng dụng")
         with st.form("login_form", clear_on_submit=False):
@@ -985,6 +982,7 @@ if tab == "📬 Phản hồi":
             try:
                 requests.post(st.secrets.get("EMAIL_API_URL",""), json={
                     "to": st.secrets.get("EMAIL_TO",""),
+                    "to": "dhnamump@gmail.com",
                     "subject": f"Phản hồi từ {name} ({feedback_type})",
                     "body": f"Email: {email}\nLoại: {feedback_type}\nNội dung:\n{feedback}"
                 })
@@ -992,7 +990,7 @@ if tab == "📬 Phản hồi":
                 st.info("Thông tin đã được ghi nhận (không gửi API).")
 
             try:
-                requests.post(st.secrets.get("SHEET_API_URL","")), json={
+                requests.post(st.secrets.get("SHEET_API_URL",""), json={
                     "name": name,
                     "email": email,
                     "type": feedback_type,
@@ -1010,6 +1008,4 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
-
-
 
