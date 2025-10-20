@@ -106,6 +106,22 @@ _autoload_df_once()
 
 # ===================== CẤU HÌNH STREAMLIT + LOGIN (ĐÃ SỬA) =====================
 st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
+# --- Session defaults: luôn có dù bị reload trong iframe ---
+def _ensure_defaults():
+    if "df" not in st.session_state:
+        st.session_state["df"] = None
+    if "model" not in st.session_state:
+        st.session_state["model"] = None
+    # targets: suy luận từ df nếu có, nếu chưa thì tối thiểu có y1
+    if "targets" not in st.session_state:
+        df = st.session_state["df"]
+        if isinstance(df, pd.DataFrame):
+            ys = [c for c in df.columns if str(c).startswith("y")]
+            st.session_state["targets"] = {y: y for y in ys} if ys else {"y1": "y1"}
+        else:
+            st.session_state["targets"] = {"y1": "y1"}
+
+_ensure_defaults()
 
 # CSS ẩn menu/header/footer và vô hiệu nav góc trái
 _HARDEN_CSS = """
@@ -533,11 +549,13 @@ if tab == "📉 Kiểm định":
 
     df = st.session_state.get("df")
     model = st.session_state.get("model")
-    targets = st.session_state.targets
+    targets = (st.session_state.get("targets")
+               or ({c: c for c in df.columns if str(c).startswith("y")} if isinstance(df, pd.DataFrame) else {"y1":"y1"}))
 
     if df is None or model is None:
-        st.warning("⚠️ Bạn cần tải dữ liệu và chọn mô hình ở các tab trước.")
+        st.warning("⚠️ Cần tải dữ liệu và huấn luyện mô hình ở tab 📊 Mô hình trước.")
         st.stop()
+
 
     st.markdown("## 🧪 Kiểm định giả định hồi quy")
 
@@ -1006,4 +1024,5 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
+
 
