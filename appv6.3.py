@@ -249,7 +249,7 @@ body, div, p { font-family: 'Open Sans', sans-serif; font-size:15px; color:#333;
 
 # 📌 Sidebar điều hướng
 st.sidebar.image("background.png", use_container_width=True)
-st.sidebar.title("Gliclazid Optimizer V6")
+st.sidebar.title("Gliclazid Optimizer")
 # 🔐 BẮT BUỘC ĐĂNG NHẬP TRƯỚC
 if not _login_gate():
     st.stop()
@@ -1069,6 +1069,7 @@ st.markdown("""
 Copyright © 2025 Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
