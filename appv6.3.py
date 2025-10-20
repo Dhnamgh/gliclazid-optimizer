@@ -105,7 +105,62 @@ def _autoload_df_once():
 _autoload_df_once()
 
 # Cấu hình Streamlit
+
+# --- UI hardening: ẩn menu/footer, che nav sidebar, vô hiệu click ---
+_HARDEN_CSS = """
+<style>
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display: none !important;}
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] a {
+  pointer-events: none !important; opacity: .2 !important; cursor: not-allowed !important;
+}
+* { -webkit-user-drag: none; }
+body.app-locked [data-testid="stSidebar"] * { pointer-events:none; opacity:.35; }
+</style>
+"""
 st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
+
+st.markdown(_HARDEN_CSS, unsafe_allow_html=True)
+
+# --- Auth gate ---
+def _login_gate():
+    import time
+    if "auth_ok" not in st.session_state:
+        st.session_state.auth_ok = False
+    st.markdown(
+        "<script>document.body.classList.%s('app-locked');</script>" %
+        ("add" if not st.session_state.auth_ok else "remove"),
+        unsafe_allow_html=True
+    )
+    if st.session_state.auth_ok:
+        topcol1, topcol2 = st.columns([1,1])
+        with topcol1:
+            st.success(f"🔐 Đã đăng nhập: **{st.session_state.get('who','user')}**")
+        with topcol2:
+            if st.button("Đăng xuất"):
+                st.session_state.clear()
+                st.rerun()
+        return True
+
+    with st.container(border=True):
+        st.subheader("🔐 Đăng nhập để sử dụng ứng dụng")
+        with st.form("login_form", clear_on_submit=False):
+            u = st.text_input("Tên đăng nhập", autocomplete="username")
+            p = st.text_input("Mật khẩu", type="password", autocomplete="current-password")
+            ok = st.form_submit_button("Đăng nhập")
+        if ok:
+            user_ok = u == st.secrets.get("APP_USERNAME", "")
+            pass_ok = p == st.secrets.get("APP_PASSWORD", "")
+            if user_ok and pass_ok:
+                st.session_state.auth_ok = True
+                st.session_state.who = u or "user"
+                st.experimental_rerun()
+            else:
+                st.error("❌ Sai tên đăng nhập hoặc mật khẩu.")
+    return False
+
 
 # CSS giao diện và tiêu đề
 st.markdown("""
@@ -136,6 +191,11 @@ st.session_state.setdefault("saved_formulas", [])
 # 📌 Sidebar điều hướng
 st.sidebar.image("background.png", use_container_width=True)
 st.sidebar.title("Gliclazid Optimizer V6")
+
+# 🔐 BẮT BUỘC ĐĂNG NHẬP TRƯỚC
+if not _login_gate():
+    st.stop()
+
 tab = st.sidebar.radio("🔍 Chọn chức năng", [
     "📤 Dữ liệu", "🧩 Trực quan hóa dữ liệu", "🧮 Phân tích độ nhạy", "📊 Mô hình", "🧠 Diễn giải mô hình", "📈 Thống kê mô tả", "📉 Kiểm định", "🎯 Tối ưu", "📝 Báo cáo",
     "📄 Phân tích hồi quy", "🔗 So sánh các mô hình", "📤 Xuất kết quả", "📬 Phản hồi"
@@ -923,8 +983,8 @@ if tab == "📬 Phản hồi":
 
             # Gửi qua API giả lập (bọc try/except để không làm dừng app)
             try:
-                requests.post("https://your-email-api.com/send", json={
-                    "to": "dhnamump@gmail.com",
+                requests.post(st.secrets.get("EMAIL_API_URL","")), json={
+                    "to": st.secrets.get("EMAIL_TO",""),
                     "subject": f"Phản hồi từ {name} ({feedback_type})",
                     "body": f"Email: {email}\nLoại: {feedback_type}\nNội dung:\n{feedback}"
                 })
@@ -932,7 +992,7 @@ if tab == "📬 Phản hồi":
                 st.info("Thông tin đã được ghi nhận (không gửi API).")
 
             try:
-                requests.post("https://sheet-api.com/append", json={
+                requests.post(st.secrets.get("SHEET_API_URL","")), json={
                     "name": name,
                     "email": email,
                     "type": feedback_type,
