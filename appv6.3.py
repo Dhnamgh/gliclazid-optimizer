@@ -983,7 +983,7 @@ if tab == "📬 Phản hồi":
 
             # Gửi qua API giả lập (bọc try/except để không làm dừng app)
             try:
-                requests.post(st.secrets.get("EMAIL_API_URL","")), json={
+                requests.post(st.secrets.get("EMAIL_API_URL",""), json={
                     "to": st.secrets.get("EMAIL_TO",""),
                     "subject": f"Phản hồi từ {name} ({feedback_type})",
                     "body": f"Email: {email}\nLoại: {feedback_type}\nNội dung:\n{feedback}"
@@ -1010,5 +1010,6 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
+
 
 
