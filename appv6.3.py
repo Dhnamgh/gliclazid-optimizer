@@ -105,7 +105,53 @@ def _autoload_df_once():
 _autoload_df_once()
 
 # ===================== CẤU HÌNH STREAMLIT + LOGIN =====================
-st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
+st.set_page_config(
+    page_title="Gliclazid Optimizer",
+    layout="wide",
+    initial_sidebar_state="expanded"  # giúp sidebar dễ bật (nhất là trên mobile)
+)
+# Che badge/profile góc phải dưới + ẩn menu, nhưng CHO PHÉP hiện nút ≡/<< trên mobile
+st.markdown("""
+<style>
+/* Ẩn menu hệ thống & footer để gọn gàng (desktop) */
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+
+/* Mặc định ẩn header (trên desktop) */
+header    { visibility: hidden; }
+
+/* ✅ Trên mobile: BẬT LẠI header để có nút ≡/<< mở sidebar */
+@media (max-width: 768px){
+  header { visibility: visible !important; }
+}
+
+/* Ẩn mục nav multipage mặc định ở sidebar (tránh người dùng đi sang app khác) */
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] { display: none !important; }
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] a {
+  pointer-events: none !important; opacity: .2 !important; cursor: not-allowed !important;
+}
+
+/* Lớp chắn click badge/profile ở góc phải dưới (áp dụng cho cả desktop & mobile) */
+#st-bottom-blocker {
+  position: fixed; right: 0; bottom: 0;
+  width: 170px; height: 170px;
+  z-index: 999999; pointer-events: auto;
+}
+#st-bottom-blocker .mask {
+  position: absolute; inset: 0;
+  background: transparent; /* đổi rgba(0,0,0,.05) nếu muốn mờ nhẹ */
+}
+
+/* Mobile: badge nhỏ hơn -> thu vùng chắn chút */
+@media (max-width: 600px){
+  #st-bottom-blocker { width: 130px; height: 130px; }
+}
+</style>
+
+<!-- lớp chắn ở góc dưới phải -->
+<div id="st-bottom-blocker"><div class="mask" title="blocked"></div></div>
+""", unsafe_allow_html=True)
+
 # --- Session defaults: luôn có dù bị reload trong iframe ---
 def _ensure_defaults():
     if "df" not in st.session_state:
@@ -1020,9 +1066,10 @@ if tab == "📬 Phản hồi":
 st.markdown("""
 <hr>
 <div style='text-align: center; font-size: 14px; color: #555;'>
-Copyright © 2019 Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh
+Copyright © 2025 Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
