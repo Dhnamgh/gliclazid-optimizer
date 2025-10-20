@@ -104,7 +104,7 @@ def _autoload_df_once():
 
 _autoload_df_once()
 
-# ===================== CẤU HÌNH STREAMLIT + LOGIN (ĐÃ SỬA) =====================
+# ===================== CẤU HÌNH STREAMLIT + LOGIN =====================
 st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 # --- Session defaults: luôn có dù bị reload trong iframe ---
 def _ensure_defaults():
@@ -198,7 +198,7 @@ body, div, p { font-family: 'Open Sans', sans-serif; font-size:15px; color:#333;
 </div>
 """, unsafe_allow_html=True)
 
-# ===================== HẾT KHỐI ĐẦU – tiếp tục code gốc ở dưới =====================
+# ===================== HẾT KHỐI ĐẦU =====================
 
 
 # 📌 Sidebar điều hướng
@@ -1020,9 +1020,9 @@ if tab == "📬 Phản hồi":
 st.markdown("""
 <hr>
 <div style='text-align: center; font-size: 14px; color: #555;'>
-📧 Email: <a href="mailto:dhnamump@gmail.com">dhnamump@gmail.com</a> |
-👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
+Copyright © 2019 Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh
 </div>
 """, unsafe_allow_html=True)
+
 
 
