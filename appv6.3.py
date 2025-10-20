@@ -104,25 +104,38 @@ def _autoload_df_once():
 
 _autoload_df_once()
 
-# Cấu hình Streamlit
+# ===================== CẤU HÌNH STREAMLIT + LOGIN (ĐÃ SỬA) =====================
+st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 
+# CSS ẩn menu/header/footer và vô hiệu nav góc trái
 _HARDEN_CSS = """
 <style>
 #MainMenu {visibility: hidden;}
-header {vis
+header {visibility: hidden;}
+footer {visibility: hidden;}
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display: none !important;}
+section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] a {
+  pointer-events: none !important; opacity: .2 !important; cursor: not-allowed !important;
+}
+* { -webkit-user-drag: none; }
+body.app-locked [data-testid="stSidebar"] * { pointer-events:none; opacity:.35; }
+</style>
+"""
 st.markdown(_HARDEN_CSS, unsafe_allow_html=True)
 
 def _safe_rerun():
+    """Tương thích nhiều phiên bản Streamlit."""
     try:
-        st.rerun()
+        st.rerun()  # Streamlit >= 1.29
     except AttributeError:
-        st.experimental_rerun()
+        st.experimental_rerun()  # Streamlit cũ
 
 def _login_gate():
+    """Form đăng nhập; trả True nếu đã đăng nhập."""
     if "auth_ok" not in st.session_state:
         st.session_state["auth_ok"] = False
 
-    # Toggle CSS blur when locked
+    # Toggle lớp mờ khi chưa đăng nhập
     st.markdown(
         "<script>document.body.classList.%s('app-locked');</script>" %
         ("add" if not st.session_state["auth_ok"] else "remove"),
@@ -155,19 +168,8 @@ def _login_gate():
             else:
                 st.error("❌ Sai tên đăng nhập hoặc mật khẩu.")
     return False
-ibility: hidden;}
-footer {visibility: hidden;}
-section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display: none !important;}
-section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] a {
-  pointer-events: none !important; opacity: .2 !important; cursor: not-allowed !important;
-}
-* { -webkit-user-drag: none; }
-body.app-locked [data-testid="stSidebar"] * { pointer-events:none; opacity:.35; }
-</style>
-"""
-st.set_page_config(page_title="Gliclazid Optimizer V6", layout="wide")
 
-# CSS giao diện và tiêu đề
+# CSS giao diện và tiêu đề (an toàn, sau khi _HARDEN_CSS đã hợp lệ)
 st.markdown("""
 <style>
 body, div, p { font-family: 'Open Sans', sans-serif; font-size:15px; color:#333; }
@@ -175,23 +177,13 @@ body, div, p { font-family: 'Open Sans', sans-serif; font-size:15px; color:#333;
 .stButton>button:hover { background-color:#045c87; }
 </style>
 <div style='background-color:#f4f8fb; padding:25px; border-radius:12px; text-align:center; margin-bottom:30px;'>
-<div style='font-size:32px; font-weight:bold; color:#045c87;'>Ứng dụng AI trong tối ưu hoá Gliclazid</div>
-<div style='font-size:16px; color:#666;'>Thiết kế công thức tá dược tối ưu</div>
+  <div style='font-size:32px; font-weight:bold; color:#045c87;'>Ứng dụng AI trong tối ưu hoá Gliclazid</div>
+  <div style='font-size:16px; color:#666;'>Thiết kế công thức tá dược tối ưu</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Session state mặc định
-st.session_state.setdefault("model_choice", "Linear Regression")
-st.session_state.setdefault("model", LinearRegression())
-st.session_state.setdefault("df", None)
-st.session_state.setdefault("targets", {
-    'y1': 'Độ cứng viên',
-    'y2': 'Thời gian rã',
-    'y3': 'Tỷ lệ hòa tan'
-})
-st.session_state.setdefault("results", {})
-st.session_state.setdefault("best_formula", None)   # sẽ lưu {'x1','x2','x3','y_pred'}
-st.session_state.setdefault("saved_formulas", [])
+# ===================== HẾT KHỐI ĐẦU – tiếp tục code gốc ở dưới =====================
+
 
 # 📌 Sidebar điều hướng
 st.sidebar.image("background.png", use_container_width=True)
@@ -1014,3 +1006,4 @@ st.markdown("""
 👥 Team: Nam, Tòng, Hà, Quân, Yến, Trang, Vi
 </div>
 """, unsafe_allow_html=True)
+
