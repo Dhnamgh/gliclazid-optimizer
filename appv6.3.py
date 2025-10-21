@@ -1062,13 +1062,12 @@ if tab == "📬 Phản hồi":
             except Exception:
                 pass
 
-# Footer HTML
-st.markdown("""
-<hr>
-<div style='text-align: center; font-size: 14px; color: #555;'>
-Copyright © 2025 Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh.
-</div>
-""", unsafe_allow_html=True)
+# ---------- FOOTER  ----------
+
+st.markdown("---")
+st.markdown("© Bản quyền thuộc về TS. Đào Hồng Nam - Đại học Y Dược Thành phố Hồ Chí Minh.")
+
+
 
 
 
